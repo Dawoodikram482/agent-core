@@ -1,0 +1,104 @@
+[project]
+name = "agent-core"
+version = "0.1.0"
+description = "Shared foundation for every agent in the Agent Avenger Project: settings, logging, tracing and the LLM gateway."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "__AUTHOR_NAME__" }]
+keywords = ["python", "llm", "agents", "pydantic", "structlog", "langfuse", "observability"]
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "poethepoet>=0.48.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+# ---------------------------------------------------------------------------
+# Tasks: uv run poe <task>   (works the same on Windows, macOS and Linux)
+# ---------------------------------------------------------------------------
+[tool.poe.tasks]
+format = { sequence = [{ cmd = "ruff check --fix ." }, { cmd = "ruff format ." }], help = "Fix lint issues and format the code" }
+lint = { sequence = [{ cmd = "ruff check ." }, { cmd = "ruff format --check ." }], help = "Lint and check formatting" }
+typecheck = { cmd = "mypy", help = "Type-check with mypy --strict" }
+test = { cmd = "pytest", help = "Run tests with coverage (fails below 80%)" }
+check = { sequence = ["lint", "typecheck", "test"], help = "Everything CI runs" }
+hooks = { cmd = "pre-commit install", help = "Install the git pre-commit hooks" }
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import order
+    "N",        # naming
+    "UP",       # modern Python syntax
+    "B",        # likely bugs
+    "S",        # security (bandit)
+    "SIM",      # simplifications
+    "C4",       # comprehensions
+    "PT",       # pytest style
+    "RET",      # return statements
+    "ANN",      # type annotations
+    "D",        # docstrings
+    "RUF",      # ruff-specific
+]
+ignore = [
+    "D100",     # module docstrings are optional
+    "D104",     # package docstrings are optional
+    "D105",     # magic-method docstrings are optional
+    "D107",     # __init__ docstrings are optional
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "D", "ANN401"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+warn_unreachable = true
+
+# ---------------------------------------------------------------------------
+# Pytest and coverage
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--cov", "--cov-report=term-missing"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["agent_core"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:"]

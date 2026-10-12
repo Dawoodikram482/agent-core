@@ -1,0 +1,8 @@
+# Keep LF line endings in the repo on every OS (Windows checkouts included),
+# so ruff, pre-commit and Docker see identical files everywhere.
+* text=auto eol=lf
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary

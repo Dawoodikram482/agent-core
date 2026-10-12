@@ -5,13 +5,22 @@ description = "Shared foundation for every agent in the Agent Avenger Project: s
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "__AUTHOR_NAME__" }]
+authors = [{ name = "Dawoodikram482" }]
 keywords = ["python", "llm", "agents", "pydantic", "structlog", "langfuse", "observability"]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic-settings>=2.15.0",
+    "structlog>=26.1.0",
+]
+
+[project.optional-dependencies]
+langfuse = [
+    "langfuse>=4.17.0",
+]
 
 [dependency-groups]
 dev = [
+    "langfuse>=4.17.0",
     "mypy>=2.4.0",
     "poethepoet>=0.48.0",
     "pre-commit>=4.6.2",
@@ -82,6 +91,7 @@ line-ending = "lf"
 [tool.mypy]
 strict = true
 python_version = "3.12"
+plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
 warn_unreachable = true
 

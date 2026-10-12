@@ -26,6 +26,25 @@ class LLMRequestError(LLMError):
         super().__init__(f"{provider} rejected the request (HTTP {status_code}): {detail}")
 
 
+class OutputTruncatedError(LLMError):
+    """The model hit ``max_tokens`` before writing any answer.
+
+    Reasoning models (e.g. ``openai/gpt-oss-120b`` on Groq, recent Gemini Flash models)
+    spend part of ``max_tokens`` thinking before they reply. With a small limit they can
+    use all of it and return an empty answer. Retrying with the same limit gives the same
+    result, so this is raised straight away: raise ``max_tokens`` or leave it unset.
+    """
+
+    def __init__(self, provider: str, model: str, max_tokens: int | None) -> None:
+        self.provider = provider
+        self.model = model
+        self.max_tokens = max_tokens
+        limit = f"max_tokens={max_tokens}" if max_tokens is not None else "the token limit"
+        super().__init__(
+            f"{provider} ({model}) used up {limit} before answering; reasoning models need a higher limit"
+        )
+
+
 @dataclass(frozen=True)
 class ProviderFailure:
     """Why one provider could not answer, for :class:`AllProvidersFailedError`."""

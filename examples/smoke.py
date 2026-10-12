@@ -31,7 +31,8 @@ async def check_provider(settings: LLMSettings, name: str) -> bool:
         try:
             result = await llm.chat(
                 [{"role": "user", "content": "Reply with exactly: pit wall online"}],
-                max_tokens=20,
+                # Reasoning models think before answering, and that counts toward the limit.
+                max_tokens=512,
                 temperature=0,
             )
         except LLMError as exc:

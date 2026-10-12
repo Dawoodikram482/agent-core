@@ -46,7 +46,7 @@ class LLMSettings(AgentSettings):
     llm_backoff_max_seconds: float = Field(default=8.0, ge=0)
 
     groq_api_key: SecretStr | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_base_url: HttpUrl = HttpUrl("https://api.groq.com/openai/v1")
     groq_max_concurrency: int = Field(default=4, ge=1)
 

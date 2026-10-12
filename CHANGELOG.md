@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-12
+
+### Fixed
+
+- Default `GROQ_MODEL` is now `openai/gpt-oss-120b`; Groq retired `llama-3.3-70b-versatile`
+  on 16 August 2026.
+- An empty reply cut off by `max_tokens` (a reasoning model that spent the whole limit
+  thinking) now raises `OutputTruncatedError` straight away instead of being retried as a
+  malformed reply.
+- `examples/smoke.py` allows 512 tokens, enough for reasoning models.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added

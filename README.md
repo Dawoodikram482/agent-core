@@ -23,10 +23,10 @@ they are configured, logged and traced the same way.
 agent-core is released as Git tags. In a service's repo:
 
 ```bash
-uv add "agent-core @ git+https://github.com/Dawoodikram482/agent-core@v0.2.0"
+uv add "agent-core @ git+https://github.com/Dawoodikram482/agent-core@v0.2.1"
 
 # with Langfuse tracing support
-uv add "agent-core[langfuse] @ git+https://github.com/Dawoodikram482/agent-core@v0.2.0"
+uv add "agent-core[langfuse] @ git+https://github.com/Dawoodikram482/agent-core@v0.2.1"
 ```
 
 ## Use it
@@ -107,6 +107,7 @@ How failures are handled:
 | HTTP 429 (rate limited) | Tries the next provider straight away |
 | Timeout, connection error, HTTP 5xx, malformed reply | Retries with exponential backoff and jitter (`LLM_MAX_ATTEMPTS`), then the next provider |
 | Other HTTP 4xx (bad request, bad key, unknown model) | Raises `LLMRequestError`: no retry, no fallback |
+| Empty answer cut off by `max_tokens` (a reasoning model spent the limit thinking) | Raises `OutputTruncatedError`: no retry, no fallback; raise `max_tokens` or leave it unset |
 | Every provider failed | Raises `AllProvidersFailedError`, listing what happened at each |
 | `chat_json` reply does not match the schema | Shows the model the errors and asks once more, then raises `InvalidJSONResponseError` |
 
@@ -134,7 +135,7 @@ LLM gateway settings (`LLMSettings`):
 | --- | --- | --- |
 | `LLM_PROVIDERS` | `groq,gemini` | Providers in fallback order: `groq`, `gemini`, `openrouter` |
 | `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | (none) | A provider is used only when its key is set |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Model per provider; check the provider's console for current names |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Model per provider; check the provider's console for current names |
 | `GEMINI_MODEL` | `gemini-flash-latest` | |
 | `OPENROUTER_MODEL` | `meta-llama/llama-3.3-70b-instruct:free` | |
 | `<NAME>_BASE_URL` | provider's OpenAI-compatible URL | Override for proxies or tests |
@@ -193,7 +194,7 @@ src/agent_core/
     ├── gateway.py           LLMGateway, RetryPolicy: fallback, retries, chat_json
     ├── settings.py          LLMSettings, ProviderConfig
     ├── models.py            ChatMessage, ChatResult, TokenUsage, JsonChatResult
-    └── errors.py            LLMRequestError, AllProvidersFailedError, ...
+    └── errors.py            LLMRequestError, OutputTruncatedError, ...
 examples/smoke.py            manual check against the real providers
 tests/                       one test module per source module
 docs/adr/                    architecture decision records

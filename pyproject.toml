@@ -1,14 +1,15 @@
 [project]
 name = "agent-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared foundation for every agent in the Agent Avenger Project: settings, logging, tracing and the LLM gateway."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Dawoodikram482" }]
-keywords = ["python", "llm", "agents", "pydantic", "structlog", "langfuse", "observability"]
+keywords = ["python", "llm", "agents", "groq", "gemini", "pydantic", "structlog", "langfuse", "observability"]
 requires-python = ">=3.12"
 dependencies = [
+    "httpx>=0.28.1",
     "pydantic-settings>=2.15.0",
     "structlog>=26.1.0",
 ]
@@ -25,7 +26,9 @@ dev = [
     "poethepoet>=0.48.0",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
     "ruff>=0.17.0",
 ]
 
@@ -50,7 +53,7 @@ hooks = { cmd = "pre-commit install", help = "Install the git pre-commit hooks" 
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "examples"]
 
 [tool.ruff.lint]
 select = [
@@ -81,6 +84,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "D", "ANN401"]
+"examples/**" = ["D103", "T201"]
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -92,7 +96,7 @@ line-ending = "lf"
 strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
-files = ["src", "tests"]
+files = ["src", "tests", "examples"]
 warn_unreachable = true
 
 # ---------------------------------------------------------------------------
@@ -102,6 +106,8 @@ warn_unreachable = true
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--cov", "--cov-report=term-missing"]
 xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["agent_core"]

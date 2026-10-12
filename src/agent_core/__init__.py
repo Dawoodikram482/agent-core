@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from agent_core.bootstrap import bootstrap
+from agent_core.llm import ChatResult, LLMGateway, LLMSettings
 from agent_core.observability import (
     Tracing,
     TracingUnavailableError,
@@ -22,6 +23,9 @@ except PackageNotFoundError:  # pragma: no cover - only when running from an uni
 
 __all__ = [
     "AgentSettings",
+    "ChatResult",
+    "LLMGateway",
+    "LLMSettings",
     "SettingsError",
     "Tracing",
     "TracingUnavailableError",

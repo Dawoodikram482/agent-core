@@ -1,0 +1,52 @@
+name: Release
+
+# Runs after every merge to main. When pyproject.toml has a version that is not tagged
+# yet and CHANGELOG.md has a section for it, this tags the commit v<version> and creates
+# a GitHub release with that section as the notes. Otherwise it does nothing.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read version and changelog section
+        id: version
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ -s release-notes.md ]; then echo "has_notes=true" >> "$GITHUB_OUTPUT"; fi
+          if git rev-parse --verify --quiet "refs/tags/v$version" > /dev/null; then
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag and release
+        if: steps.version.outputs.has_notes == 'true' && steps.version.outputs.tagged != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file release-notes.md --target "$GITHUB_SHA"
+          echo "Released v$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nothing to release
+        if: steps.version.outputs.has_notes != 'true' || steps.version.outputs.tagged == 'true'
+        run: echo "No new version to release (v${{ steps.version.outputs.version }} already tagged or not in CHANGELOG)." >> "$GITHUB_STEP_SUMMARY"

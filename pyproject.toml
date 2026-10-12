@@ -1,12 +1,12 @@
 [project]
 name = "agent-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared foundation for every agent in the Agent Avenger Project: settings, logging, tracing and the LLM gateway."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Dawoodikram482" }]
-keywords = ["python", "llm", "agents", "pydantic", "structlog", "langfuse", "observability"]
+keywords = ["python", "llm", "agents", "groq", "gemini", "pydantic", "structlog", "langfuse", "observability"]
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",

@@ -16,18 +16,17 @@ they are configured, logged and traced the same way.
 | **Correlation IDs** | One ID per request or run on every log line, safe across async tasks |
 | **Secret masking** | API keys, tokens, passwords and `SecretStr` values masked before anything is written |
 | **Tracing** | Langfuse when its keys are set; a no-op otherwise, so every service runs without it |
-
-Coming next: the LLM gateway with Groq → Gemini fallback (PW-3).
+| **LLM gateway** | One async client for Groq, Gemini and OpenRouter with automatic fallback, retries and validated JSON replies |
 
 ## Install
 
 agent-core is released as Git tags. In a service's repo:
 
 ```bash
-uv add "agent-core @ git+https://github.com/Dawoodikram482/agent-core@v0.1.0"
+uv add "agent-core @ git+https://github.com/Dawoodikram482/agent-core@v0.2.0"
 
 # with Langfuse tracing support
-uv add "agent-core[langfuse] @ git+https://github.com/Dawoodikram482/agent-core@v0.1.0"
+uv add "agent-core[langfuse] @ git+https://github.com/Dawoodikram482/agent-core@v0.2.0"
 ```
 
 ## Use it
@@ -75,6 +74,46 @@ agent_core.settings.SettingsError: Invalid settings for IngestSettings:
 
 Call `tracing.shutdown()` when the process exits so buffered traces are sent.
 
+## LLM gateway
+
+`LLMGateway` sends OpenAI-compatible chat requests to the providers in `LLM_PROVIDERS`,
+in order, and returns the same `ChatResult` whichever one answered.
+
+```python
+from pydantic import BaseModel
+
+from agent_core import LLMGateway, LLMSettings, bootstrap
+
+
+class Winner(BaseModel):
+    driver: str
+    team: str
+
+
+settings, tracing = bootstrap(LLMSettings)  # or your own subclass of LLMSettings
+
+async with LLMGateway.from_settings(settings) as llm:
+    result = await llm.chat([{"role": "user", "content": "Who won the 2026 Singapore GP?"}])
+    print(result.text, result.provider, result.usage.total_tokens, result.latency_ms)
+
+    reply = await llm.chat_json([{"role": "user", "content": "Who won? Answer as JSON."}], Winner)
+    print(reply.data.driver)  # validated Winner instance
+```
+
+How failures are handled:
+
+| What happens | What the gateway does |
+| --- | --- |
+| HTTP 429 (rate limited) | Tries the next provider straight away |
+| Timeout, connection error, HTTP 5xx, malformed reply | Retries with exponential backoff and jitter (`LLM_MAX_ATTEMPTS`), then the next provider |
+| Other HTTP 4xx (bad request, bad key, unknown model) | Raises `LLMRequestError`: no retry, no fallback |
+| Every provider failed | Raises `AllProvidersFailedError`, listing what happened at each |
+| `chat_json` reply does not match the schema | Shows the model the errors and asks once more, then raises `InvalidJSONResponseError` |
+
+Each provider has a concurrency cap (`GROQ_MAX_CONCURRENCY` and so on), so a burst of calls
+stays within its free tier. Check your keys and model names against the real providers with
+`uv run python examples/smoke.py` (uses a few hundred tokens).
+
 ## Configuration
 
 Every service built on agent-core reads these. Copy `.env.example` to `.env` for local runs.
@@ -88,6 +127,21 @@ Every service built on agent-core reads these. Copy `.env.example` to `.env` for
 | `LANGFUSE_PUBLIC_KEY` | (none) | Langfuse public key; tracing is on only when both keys are set |
 | `LANGFUSE_SECRET_KEY` | (none) | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | Langfuse server, cloud or self-hosted |
+
+LLM gateway settings (`LLMSettings`):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `LLM_PROVIDERS` | `groq,gemini` | Providers in fallback order: `groq`, `gemini`, `openrouter` |
+| `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | (none) | A provider is used only when its key is set |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Model per provider; check the provider's console for current names |
+| `GEMINI_MODEL` | `gemini-flash-latest` | |
+| `OPENROUTER_MODEL` | `meta-llama/llama-3.3-70b-instruct:free` | |
+| `<NAME>_BASE_URL` | provider's OpenAI-compatible URL | Override for proxies or tests |
+| `<NAME>_MAX_CONCURRENCY` | 4 (OpenRouter 2) | Simultaneous requests per provider |
+| `LLM_TIMEOUT_SECONDS` | `30` | Timeout per request |
+| `LLM_MAX_ATTEMPTS` | `3` | Requests per provider before falling back |
+| `LLM_BACKOFF_BASE_SECONDS` / `LLM_BACKOFF_MAX_SECONDS` | `0.5` / `8` | Backoff range between retries |
 
 Environment variables win over `.env`. Names are case-insensitive.
 
@@ -104,6 +158,10 @@ Environment variables win over `.env`. Names are case-insensitive.
 | `bind_correlation_id(id=None)` / `get_correlation_id()` | Set or read the current ID |
 | `configure_tracing(settings)` | Start Langfuse if configured; returns a `Tracing` handle |
 | `Tracing.flush()` / `Tracing.shutdown()` | Send buffered traces / stop tracing at exit |
+| `LLMSettings` | Agent settings plus LLM providers and retry policy |
+| `LLMGateway.from_settings(settings)` | Gateway over the configured providers (use with `async with`) |
+| `LLMGateway.chat(messages, ...)` | One chat call with fallback; returns `ChatResult` |
+| `LLMGateway.chat_json(messages, Model, ...)` | Validated structured reply; returns `JsonChatResult` |
 
 ## Development
 
@@ -114,6 +172,10 @@ uv sync              # install everything, including Langfuse for the tests
 uv run poe hooks     # install the git pre-commit hooks
 uv run poe check     # lint, mypy --strict and tests (fails below 80% coverage)
 ```
+
+Releases are automatic: bump `version` in `pyproject.toml` and add a matching section to
+`CHANGELOG.md` in the same pull request. Merging it tags `v<version>` and publishes the
+release notes.
 
 Run `uv run poe` for all tasks.
 
@@ -127,6 +189,12 @@ src/agent_core/
     ├── logging.py           configure_logging, get_logger, secret masking
     ├── context.py           correlation IDs
     └── tracing.py           configure_tracing, Tracing
+└── llm/
+    ├── gateway.py           LLMGateway, RetryPolicy: fallback, retries, chat_json
+    ├── settings.py          LLMSettings, ProviderConfig
+    ├── models.py            ChatMessage, ChatResult, TokenUsage, JsonChatResult
+    └── errors.py            LLMRequestError, AllProvidersFailedError, ...
+examples/smoke.py            manual check against the real providers
 tests/                       one test module per source module
 docs/adr/                    architecture decision records
 ```
@@ -137,6 +205,7 @@ docs/adr/                    architecture decision records
 - [ADR 2: Use poethepoet as the task runner](docs/adr/0002-poethepoet-task-runner.md)
 - [ADR 3: agent-core is a library, not a service](docs/adr/0003-agent-core-is-a-library.md)
 - [ADR 4: Settings, logging and tracing stack](docs/adr/0004-settings-logging-and-tracing.md)
+- [ADR 5: LLM gateway with provider fallback](docs/adr/0005-llm-gateway.md)
 
 ## License
 

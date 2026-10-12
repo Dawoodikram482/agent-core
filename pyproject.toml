@@ -1,6 +1,6 @@
 [project]
 name = "agent-core"
-version = "0.2.0"
+version = "0.2.1"
 description = "Shared foundation for every agent in the Agent Avenger Project: settings, logging, tracing and the LLM gateway."
 readme = "README.md"
 license = "MIT"

@@ -6,6 +6,7 @@ from agent_core.llm.errors import (
     LLMError,
     LLMRequestError,
     NoProvidersConfiguredError,
+    OutputTruncatedError,
     ProviderFailure,
 )
 from agent_core.llm.gateway import LLMGateway, RetryPolicy
@@ -24,6 +25,7 @@ __all__ = [
     "LLMRequestError",
     "LLMSettings",
     "NoProvidersConfiguredError",
+    "OutputTruncatedError",
     "ProviderConfig",
     "ProviderFailure",
     "RetryPolicy",

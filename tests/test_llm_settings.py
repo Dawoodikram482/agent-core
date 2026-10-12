@@ -10,7 +10,7 @@ def test_defaults_try_groq_then_gemini() -> None:
     settings = load_settings(LLMSettings)
 
     assert settings.llm_providers == ["groq", "gemini"]
-    assert settings.groq_model == "llama-3.3-70b-versatile"
+    assert settings.groq_model == "openai/gpt-oss-120b"
     assert settings.gemini_model == "gemini-flash-latest"
     assert settings.llm_max_attempts == 3
 

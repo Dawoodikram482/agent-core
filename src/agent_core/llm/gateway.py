@@ -9,7 +9,9 @@ How a call is routed:
    gateway falls back to the next provider.
 4. Any other 4xx (bad request, bad key, unknown model) raises :class:`LLMRequestError`
    straight away: retrying or falling back would only hide the mistake.
-5. If no provider answers, :class:`AllProvidersFailedError` lists what happened at each.
+5. An empty answer cut off by ``max_tokens`` (a reasoning model that spent the whole
+   limit thinking) raises :class:`OutputTruncatedError` straight away, for the same reason.
+6. If no provider answers, :class:`AllProvidersFailedError` lists what happened at each.
 
 Each provider has its own concurrency cap, so a burst of calls cannot exceed what its
 free tier tolerates.
@@ -35,6 +37,7 @@ from agent_core.llm.errors import (
     InvalidJSONResponseError,
     LLMRequestError,
     NoProvidersConfiguredError,
+    OutputTruncatedError,
     ProviderFailure,
 )
 from agent_core.llm.models import (
@@ -186,6 +189,7 @@ class LLMGateway:
 
         Raises:
             LLMRequestError: A provider rejected the request itself (not retried).
+            OutputTruncatedError: The model used up ``max_tokens`` before answering.
             AllProvidersFailedError: No provider produced an answer.
         """
         payload_base: dict[str, Any] = {"messages": [m.model_dump() for m in to_messages(messages)]}
@@ -308,10 +312,17 @@ class LLMGateway:
         try:
             body = response.json()
             choice = body["choices"][0]
-            text = choice["message"]["content"]
+            text = choice["message"].get("content")
+            finish_reason = choice.get("finish_reason")
+            if finish_reason == "length" and not text:
+                truncated = OutputTruncatedError(
+                    provider.name, provider.model, payload_base.get("max_tokens")
+                )
+                log.error("llm output truncated", provider=provider.name, model=provider.model)
+                raise truncated
             if not isinstance(text, str):
                 raise TypeError("content is not text")
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
             raise _RetryableError("malformed response") from exc
 
         return ChatResult(
@@ -321,7 +332,7 @@ class LLMGateway:
             usage=TokenUsage.model_validate(body.get("usage") or {}),
             latency_ms=latency_ms,
             attempts=attempt_no,
-            finish_reason=choice.get("finish_reason"),
+            finish_reason=finish_reason,
         )
 
 

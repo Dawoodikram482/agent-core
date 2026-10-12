@@ -18,6 +18,7 @@ from agent_core.llm import (
     LLMRequestError,
     LLMSettings,
     NoProvidersConfiguredError,
+    OutputTruncatedError,
     ProviderConfig,
     RetryPolicy,
 )
@@ -204,12 +205,63 @@ async def test_malformed_replies_are_retried(make_gateway: Callable[..., LLMGate
             httpx.Response(200, json={"choices": [{"message": {"content": None}}]}),
         ]
     )
-    respx.post(GEMINI_URL).mock(return_value=completion("ok"))
+    respx.post(GEMINI_URL).mock(
+        side_effect=[httpx.Response(200, json={"choices": [{"message": "not an object"}]}), completion("ok")]
+    )
 
     result = await make_gateway().chat(QUESTION)
 
     assert result.provider == "gemini"
-    assert result.attempts == 4
+    assert result.attempts == 5
+
+
+def truncated(content: str | None) -> httpx.Response:
+    message: dict[str, Any] = {"role": "assistant", "content": content}
+    choice = {"index": 0, "message": message, "finish_reason": "length"}
+    return httpx.Response(200, json={"model": "served-model", "choices": [choice]})
+
+
+@respx.mock
+@pytest.mark.parametrize("content", [None, ""])
+async def test_empty_answer_cut_off_by_max_tokens_raises_at_once(
+    make_gateway: Callable[..., LLMGateway], content: str | None
+) -> None:
+    groq = respx.post(GROQ_URL).mock(return_value=truncated(content))
+    gemini = respx.post(GEMINI_URL).mock(return_value=completion("unused"))
+
+    with pytest.raises(OutputTruncatedError) as caught:
+        await make_gateway().chat(QUESTION, max_tokens=20)
+
+    assert caught.value.provider == "groq"
+    assert caught.value.model == "groq-model"
+    assert caught.value.max_tokens == 20
+    assert "max_tokens=20" in str(caught.value)
+    assert groq.call_count == 1
+    assert not gemini.called
+
+
+@respx.mock
+async def test_truncation_without_a_limit_names_the_token_limit(
+    make_gateway: Callable[..., LLMGateway],
+) -> None:
+    respx.post(GROQ_URL).mock(return_value=truncated(None))
+
+    with pytest.raises(OutputTruncatedError, match="the token limit") as caught:
+        await make_gateway().chat(QUESTION)
+
+    assert caught.value.max_tokens is None
+
+
+@respx.mock
+async def test_partial_answer_cut_off_by_max_tokens_is_returned(
+    make_gateway: Callable[..., LLMGateway],
+) -> None:
+    respx.post(GROQ_URL).mock(return_value=truncated("Pit wall onl"))
+
+    result = await make_gateway().chat(QUESTION, max_tokens=5)
+
+    assert result.text == "Pit wall onl"
+    assert result.finish_reason == "length"
 
 
 @respx.mock
